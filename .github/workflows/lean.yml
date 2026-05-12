@@ -89,4 +89,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: bash scripts/sorry-diff.sh sorry-manifest-base.txt sorry-manifest.txt
+        run: python3 scripts/sorry-diff.py sorry-manifest-base.txt sorry-manifest.txt
