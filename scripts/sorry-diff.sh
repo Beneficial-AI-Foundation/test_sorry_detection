@@ -23,7 +23,7 @@ fi
 
 total=$(wc -l < "$HEAD" | tr -d ' ')
 
-if [ -n "$BASE" ] && [ -f "$BASE" ] && [ -s "$BASE" ]; then
+if [ -n "$BASE" ] && [ -f "$BASE" ]; then
   has_baseline=true
   new_lines=$(comm -13 <(LC_ALL=C sort "$BASE") <(LC_ALL=C sort "$HEAD") || true)
   if [ -z "$new_lines" ]; then
