@@ -78,15 +78,20 @@ if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
 fi
 
 # ── Upsert PR comment ─────────────────────────────────────────────────
-if [ -n "${PR_NUMBER:-}" ] && [ -n "${GITHUB_REPOSITORY:-}" ]; then
-  existing=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" \
-    --jq '.[] | select(.body | contains("<!-- sorry-delta-bot -->")) | .id' 2>/dev/null \
-    | head -1 || true)
+if [ -n "${PR_NUMBER:-}" ]; then
+  existing=""
+  if comments_json=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" 2>&1); then
+    existing=$(echo "$comments_json" \
+      | jq -r '.[] | select(.body | contains("<!-- sorry-delta-bot -->")) | .id' \
+      | head -1 2>/dev/null || true)
+  fi
+
   if [ -n "$existing" ]; then
     gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments/${existing}" \
-      -X PATCH -f body="$body" > /dev/null
+      -X PATCH -f body="$body" > /dev/null 2>&1 || \
+      gh pr comment "$PR_NUMBER" --body "$body" > /dev/null 2>&1 || true
   else
-    gh pr comment "$PR_NUMBER" --body "$body" > /dev/null
+    gh pr comment "$PR_NUMBER" --body "$body" > /dev/null 2>&1 || true
   fi
 fi
 
