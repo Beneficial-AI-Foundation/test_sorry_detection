@@ -1,0 +1,91 @@
+name: Lean Verification
+
+on:
+  push:
+    branches: [ '**' ]
+    paths:
+      - 'Poc/**'
+      - 'Poc.lean'
+      - 'lakefile.toml'
+      - 'lean-toolchain'
+      - 'scripts/**'
+      - '.github/workflows/lean.yml'
+  pull_request:
+    branches: [ '**' ]
+  workflow_dispatch:
+
+env:
+  LEAN_ABORT_ON_PANIC: 1
+
+jobs:
+  build:
+    name: Build Lean Project
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install elan (Lean version manager)
+        run: |
+          curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
+          echo "$HOME/.elan/bin" >> $GITHUB_PATH
+
+      - name: Verify elan installation
+        run: |
+          elan --version
+          lean --version
+
+      - name: Cache Lean build
+        uses: actions/cache@v4
+        with:
+          path: |
+            .lake
+          key: ${{ runner.os }}-lean-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lakefile.toml') }}-${{ hashFiles('Poc/**/*.lean', 'Poc.lean') }}
+          restore-keys: |
+            ${{ runner.os }}-lean-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lakefile.toml') }}-
+            ${{ runner.os }}-lean-${{ hashFiles('lean-toolchain') }}-
+            ${{ runner.os }}-lean-
+
+      - name: Build Lean project
+        run: lake build
+
+      - name: Verify build success
+        run: |
+          echo "Build successful!"
+
+      - name: Axiom audit
+        run: lake env lean scripts/PrintAxioms.lean
+
+      - name: Restore base sorry manifest
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v4
+        with:
+          key: sorry-manifest-${{ github.event.pull_request.base.sha }}
+          restore-keys: sorry-manifest-
+          path: sorry-manifest.txt
+
+      - name: Prepare base manifest
+        if: github.event_name == 'pull_request'
+        run: |
+          [ -f sorry-manifest.txt ] && mv sorry-manifest.txt sorry-manifest-base.txt || true
+
+      - name: Generate sorry manifest
+        run: lake env lean scripts/SorryLister.lean
+
+      - name: Save sorry manifest to cache
+        if: github.event_name != 'pull_request'
+        uses: actions/cache/save@v4
+        with:
+          key: sorry-manifest-${{ github.sha }}
+          path: sorry-manifest.txt
+
+      - name: Report sorry delta
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: bash scripts/sorry-diff.sh sorry-manifest-base.txt sorry-manifest.txt
