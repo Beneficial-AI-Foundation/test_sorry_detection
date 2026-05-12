@@ -11,6 +11,7 @@ non-builtin ones.
 Reference: https://lean-lang.org/doc/reference/latest/ValidatingProofs/
 -/
 import Poc
+import Lean
 
 open Lean Elab Command
 

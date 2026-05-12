@@ -13,6 +13,7 @@ Writes sorted output to `sorry-manifest.txt`, one line per declaration:
   <module> <declaration> <direct|transitive>
 -/
 import Poc
+import Lean
 
 open Lean Elab Command
 
