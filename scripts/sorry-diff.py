@@ -7,20 +7,18 @@ Usage:
 
 Environment variables (set by CI):
     GITHUB_STEP_SUMMARY  - path to the job summary file
-    GITHUB_REPOSITORY    - owner/repo
-    GITHUB_TOKEN         - token with pull-requests:write
-    PR_NUMBER            - pull request number
     SORRY_FAIL_ON_NEW    - if "true", exit 1 when new sorries are found
+
+Outputs:
+    .sorry-delta-comment.md  - written for sticky-pull-request-comment action
 """
 from __future__ import annotations
 
-import json
 import os
-import subprocess
 import sys
 from pathlib import Path
 
-MARKER = "<!-- sorry-delta-bot -->"
+COMMENT_FILE = ".sorry-delta-comment.md"
 MAX_ROWS = 50
 
 
@@ -49,7 +47,7 @@ def parse_line(line: str) -> tuple[str, str, str]:
 
 
 def build_body(has_baseline: bool, new_lines: list[str], total: int) -> str:
-    lines = [MARKER, "### Sorry Delta", ""]
+    lines = ["### Sorry Delta", ""]
 
     if not has_baseline:
         lines.append(
@@ -79,52 +77,6 @@ def build_body(has_baseline: bool, new_lines: list[str], total: int) -> str:
         lines.append(f"... and {remaining} more (see full manifest in job log)")
 
     return "\n".join(lines)
-
-
-def gh(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["gh", *args], capture_output=True, text=True)
-
-
-def upsert_pr_comment(body: str) -> None:
-    pr_number = os.environ.get("PR_NUMBER", "")
-    repo = os.environ.get("GITHUB_REPOSITORY", "")
-    if not pr_number:
-        return
-
-    existing_id = None
-    result = gh("api", "--paginate", "--slurp",
-                f"repos/{repo}/issues/{pr_number}/comments")
-    if result.returncode == 0:
-        try:
-            for page in json.loads(result.stdout):
-                for comment in page:
-                    if MARKER in comment.get("body", ""):
-                        existing_id = comment["id"]
-                        break
-                if existing_id:
-                    break
-        except (json.JSONDecodeError, KeyError, TypeError):
-            pass
-    else:
-        print(f"warning: failed to list PR comments (exit {result.returncode}): "
-              f"{result.stderr.strip()}", file=sys.stderr)
-
-    if existing_id:
-        result = gh("api",
-                     f"repos/{repo}/issues/comments/{existing_id}",
-                     "-X", "PATCH", "-f", f"body={body}")
-        if result.returncode == 0:
-            return
-        print(f"warning: failed to update comment {existing_id} "
-              f"(exit {result.returncode}): {result.stderr.strip()}",
-              file=sys.stderr)
-
-    result = gh("pr", "comment", pr_number, "--body", body)
-    if result.returncode != 0:
-        print(f"warning: failed to create PR comment "
-              f"(exit {result.returncode}): {result.stderr.strip()}",
-              file=sys.stderr)
 
 
 def main() -> None:
@@ -157,8 +109,7 @@ def main() -> None:
         with open(summary_path, "a") as f:
             f.write(body + "\n")
 
-    if os.environ.get("PR_NUMBER"):
-        upsert_pr_comment(body)
+    Path(COMMENT_FILE).write_text(body + "\n")
 
     print("--- Sorry Delta Summary ---")
     print(f"Total sorry-tainted: {total}")
