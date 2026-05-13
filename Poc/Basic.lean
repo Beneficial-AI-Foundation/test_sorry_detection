@@ -11,4 +11,4 @@ theorem add_assoc_nat (a b c : Nat) : a + (b + c) = (a + b) + c := (Nat.add_asso
 theorem zero_add_nat (a : Nat) : 0 + a = a := Nat.zero_add a
 
 theorem sub_self_eq_zero (a : Nat) : a - a + 0 = 0 := by
-  rw [sub_self_nat a]; rfl
+  rw [sub_self_nat a]
