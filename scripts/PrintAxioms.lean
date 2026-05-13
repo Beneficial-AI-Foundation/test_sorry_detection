@@ -4,9 +4,12 @@ Automatically print all axioms used by every declaration in this project.
 Usage:
   lake env lean scripts/PrintAxioms.lean
 
-Discovers all modules whose name starts with `Poc`, then for each
-theorem/def/opaque it collects the transitive axiom closure and reports
-non-builtin ones.
+Scans all `Poc.*` modules reachable via `import Poc` (i.e. those
+already part of the build), then for each theorem/def/opaque/axiom it
+collects the transitive axiom closure and reports non-builtin ones.
+
+Any `Poc.*` module not imported by the root `Poc` module will not be
+scanned.  Ensure new modules are re-exported from `Poc.lean`.
 
 Reference: https://lean-lang.org/doc/reference/latest/ValidatingProofs/
 -/
@@ -45,7 +48,7 @@ run_cmd liftTermElabM do
         else
           match ci with
           | .thmInfo _ | .defnInfo _ | .opaqueInfo _ | .axiomInfo _ =>
-            (ml.insert nm moduleNames[idx.toNat]!, pa.push nm)
+            (ml.insert nm (moduleNames[idx.toNat]?.getD `unknown), pa.push nm)
           | _ => acc
       | none => acc
 

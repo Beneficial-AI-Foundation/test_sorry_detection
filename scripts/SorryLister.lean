@@ -4,10 +4,14 @@ Generate a machine-readable sorry manifest for CI delta reporting.
 Usage:
   lake env lean scripts/SorryLister.lean
 
-Discovers all modules whose name starts with `Poc`, then for each
-theorem/def/opaque that transitively depends on `sorryAx`, classifies it
-as `direct` (body itself references `sorryAx`) or `transitive` (calls
-something that eventually reaches `sorryAx`).
+Scans all `Poc.*` modules reachable via `import Poc` (i.e. those
+already part of the build), then for each theorem/def/opaque/axiom that
+transitively depends on `sorryAx`, classifies it as `direct` (body
+itself references `sorryAx`) or `transitive` (calls something that
+eventually reaches `sorryAx`).
+
+Any `Poc.*` module not imported by the root `Poc` module will not be
+scanned.  Ensure new modules are re-exported from `Poc.lean`.
 
 Writes sorted output to `sorry-manifest.txt`, one line per declaration:
   <module> <declaration> <direct|transitive>
@@ -38,7 +42,7 @@ run_cmd liftTermElabM do
         else
           match ci with
           | .thmInfo _ | .defnInfo _ | .opaqueInfo _ | .axiomInfo _ =>
-            (ml.insert nm moduleNames[idx.toNat]!, pa.push nm)
+            (ml.insert nm (moduleNames[idx.toNat]?.getD `unknown), pa.push nm)
           | _ => acc
       | none => acc
 
@@ -71,6 +75,6 @@ run_cmd liftTermElabM do
       lines := lines.push s!"{modName} {nm} {kind}"
 
   let sorted := lines.qsort (· < ·)
-  let content := sorted.foldl (fun acc l => acc ++ l ++ "\n") ""
+  let content := String.join (sorted.toList.map (· ++ "\n"))
   IO.FS.writeFile "sorry-manifest.txt" content
   logInfo m!"sorry-manifest.txt written ({sorted.size} sorry-tainted declarations)"
