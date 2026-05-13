@@ -6,9 +6,9 @@ on:
     paths:
       - 'Poc/**'
       - 'Poc.lean'
+      - 'scripts/**'
       - 'lakefile.toml'
       - 'lean-toolchain'
-      - 'scripts/**'
       - '.github/workflows/lean.yml'
   pull_request:
     branches: [ '**' ]
@@ -23,8 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pull-requests: write
-      issues: write
+      actions: write
 
     steps:
       - name: Checkout repository
@@ -43,8 +42,7 @@ jobs:
       - name: Cache Lean build
         uses: actions/cache@v4
         with:
-          path: |
-            .lake
+          path: .lake
           key: ${{ runner.os }}-lean-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lakefile.toml') }}-${{ hashFiles('Poc/**/*.lean', 'Poc.lean') }}
           restore-keys: |
             ${{ runner.os }}-lean-${{ hashFiles('lean-toolchain') }}-${{ hashFiles('lakefile.toml') }}-
@@ -65,8 +63,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/cache/restore@v4
         with:
-          key: sorry-manifest-${{ github.event.pull_request.base.sha }}
-          restore-keys: sorry-manifest-
+          key: sorry-manifest-${{ github.event.pull_request.base.ref }}-${{ github.event.pull_request.base.sha }}
           path: sorry-manifest.txt
 
       - name: Prepare base manifest
@@ -78,15 +75,47 @@ jobs:
         run: lake env lean scripts/SorryLister.lean
 
       - name: Save sorry manifest to cache
-        if: github.event_name != 'pull_request'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/cache/save@v4
         with:
-          key: sorry-manifest-${{ github.sha }}
+          key: sorry-manifest-main-${{ github.sha }}
           path: sorry-manifest.txt
 
-      - name: Report sorry delta
+      - name: Upload sorry manifests
         if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sorry-manifests
+          path: |
+            sorry-manifest.txt
+            sorry-manifest-base.txt
+          if-no-files-found: ignore
+          retention-days: 1
+
+  report-sorry-delta:
+    name: Report Sorry Delta
+    if: github.event_name == 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: scripts/
+
+      - name: Download sorry manifests
+        uses: actions/download-artifact@v4
+        with:
+          name: sorry-manifests
+          path: sorry-manifests
+
+      - name: Report sorry delta
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
-        run: python3 scripts/sorry-diff.py sorry-manifest-base.txt sorry-manifest.txt
+        run: python3 scripts/sorry-diff.py sorry-manifests/sorry-manifest-base.txt sorry-manifests/sorry-manifest.txt

@@ -24,10 +24,21 @@ MARKER = "<!-- sorry-delta-bot -->"
 MAX_ROWS = 50
 
 
-def read_manifest(path: Path) -> set[str]:
+def read_manifest(path: Path) -> dict[str, str]:
+    """Parse manifest into {decl: full_line} keyed by declaration name.
+
+    Lean declaration names are globally unique, so the declaration column
+    alone is sufficient as an identity key.  The full line (including module
+    and kind) is kept for display purposes.
+    """
     if not path.exists():
-        return set()
-    return {line for line in path.read_text().splitlines() if line.strip()}
+        return {}
+    result: dict[str, str] = {}
+    for line in path.read_text().splitlines():
+        parts = line.split()
+        if len(parts) >= 2:
+            result[parts[1]] = line
+    return result
 
 
 def parse_line(line: str) -> tuple[str, str, str]:
@@ -82,24 +93,38 @@ def upsert_pr_comment(body: str) -> None:
         return
 
     existing_id = None
-    result = gh("api", f"repos/{repo}/issues/{pr_number}/comments")
+    result = gh("api", "--paginate", "--slurp",
+                f"repos/{repo}/issues/{pr_number}/comments")
     if result.returncode == 0:
         try:
-            for comment in json.loads(result.stdout):
-                if MARKER in comment.get("body", ""):
-                    existing_id = comment["id"]
+            for page in json.loads(result.stdout):
+                for comment in page:
+                    if MARKER in comment.get("body", ""):
+                        existing_id = comment["id"]
+                        break
+                if existing_id:
                     break
-        except (json.JSONDecodeError, KeyError):
+        except (json.JSONDecodeError, KeyError, TypeError):
             pass
+    else:
+        print(f"warning: failed to list PR comments (exit {result.returncode}): "
+              f"{result.stderr.strip()}", file=sys.stderr)
 
     if existing_id:
         result = gh("api",
-                     f"repos/{repo}/issues/{pr_number}/comments/{existing_id}",
+                     f"repos/{repo}/issues/comments/{existing_id}",
                      "-X", "PATCH", "-f", f"body={body}")
         if result.returncode == 0:
             return
+        print(f"warning: failed to update comment {existing_id} "
+              f"(exit {result.returncode}): {result.stderr.strip()}",
+              file=sys.stderr)
 
-    gh("pr", "comment", pr_number, "--body", body)
+    result = gh("pr", "comment", pr_number, "--body", body)
+    if result.returncode != 0:
+        print(f"warning: failed to create PR comment "
+              f"(exit {result.returncode}): {result.stderr.strip()}",
+              file=sys.stderr)
 
 
 def main() -> None:
@@ -114,13 +139,14 @@ def main() -> None:
         print(f"Error: head manifest not found at '{head_path}'", file=sys.stderr)
         sys.exit(1)
 
-    head_lines = read_manifest(head_path)
-    total = len(head_lines)
+    head_decls = read_manifest(head_path)
+    total = len(head_decls)
 
     has_baseline = base_path.exists()
     if has_baseline:
-        base_lines = read_manifest(base_path)
-        new_lines = sorted(head_lines - base_lines)
+        base_decls = read_manifest(base_path)
+        new_keys = sorted(set(head_decls) - set(base_decls))
+        new_lines = [head_decls[k] for k in new_keys]
     else:
         new_lines = []
 
@@ -131,7 +157,8 @@ def main() -> None:
         with open(summary_path, "a") as f:
             f.write(body + "\n")
 
-    upsert_pr_comment(body)
+    if os.environ.get("PR_NUMBER"):
+        upsert_pr_comment(body)
 
     print("--- Sorry Delta Summary ---")
     print(f"Total sorry-tainted: {total}")
