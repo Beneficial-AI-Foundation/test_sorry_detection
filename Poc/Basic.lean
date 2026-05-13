@@ -6,6 +6,6 @@ theorem mul_comm_nat (a b : Nat) : a * b = b * a := by sorry
 
 theorem sub_self_nat (a : Nat) : a - a = 0 := by sorry
 
-theorem add_assoc_nat (a b c : Nat) : a + (b + c) = (a + b) + c := by sorry
+theorem add_assoc_nat (a b c : Nat) : a + (b + c) = (a + b) + c := Nat.add_assoc a b c
 
 theorem zero_add_nat (a : Nat) : 0 + a = a := Nat.zero_add a
