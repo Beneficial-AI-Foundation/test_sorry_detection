@@ -14,3 +14,5 @@ theorem sub_self_eq_zero (a : Nat) : a - a + 0 = 0 := by
   rw [sub_self_nat a]
 
 theorem mul_one_nat (a : Nat) : a * 1 = a := by sorry
+
+theorem div_self_nat (a : Nat) (h : a ≠ 0) : a / a = 1 := by sorry
