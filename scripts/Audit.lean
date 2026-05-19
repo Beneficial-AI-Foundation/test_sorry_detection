@@ -1,8 +1,8 @@
 /-
-Automatically print all axioms used by every declaration in this project.
+Axiom audit and sorry-manifest generator.
 
 Usage:
-  lake env lean scripts/PrintAxioms.lean
+  lake env lean scripts/Audit.lean
 
 Scans all `Poc.*` modules reachable via `import Poc` (i.e. those
 already part of the build), then for each theorem/def/opaque/axiom it
@@ -10,6 +10,11 @@ collects the transitive axiom closure and reports non-builtin ones.
 
 Any `Poc.*` module not imported by the root `Poc` module will not be
 scanned.  Ensure new modules are re-exported from `Poc.lean`.
+
+Section 1 gives a full project summary.
+Section 2 writes `sorry-manifest.txt` (machine-readable, one line per
+  sorry-tainted declaration) consumed by `scripts/sorry-diff.py` for
+  CI delta reporting.
 
 Reference: https://lean-lang.org/doc/reference/latest/ValidatingProofs/
 -/
@@ -55,11 +60,30 @@ run_cmd liftTermElabM do
   let modOf (nm : Name) : String :=
     moduleLookup[nm]?.map toString |>.getD "(current file)"
 
+  let getBodyRefs (nm : Name) : Array Name :=
+    match env.find? nm with
+    | some (.thmInfo   ci) => ci.value.getUsedConstants
+    | some (.defnInfo  ci) => ci.value.getUsedConstants
+    | some (.opaqueInfo ci) => ci.value.getUsedConstants
+    | _ => #[]
+
   let mut axiomCache : Std.HashMap Name (Array Name) := {}
   for h : i in [:allProjectDecls.size] do
     let nm := allProjectDecls[i]
     let usedAxioms ← Lean.collectAxioms nm
     axiomCache := axiomCache.insert nm usedAxioms
+
+  let mut directSorrySet : Std.HashSet Name := {}
+  for h : i in [:allProjectDecls.size] do
+    let nm := allProjectDecls[i]
+    if (getBodyRefs nm).any (· == ``sorryAx) then
+      directSorrySet := directSorrySet.insert nm
+
+  -- ── SECTION 1: Full project summary ───────────────────────────────────
+
+  logInfo m!"\n╔══════════════════════════════════════════════════════╗"
+  logInfo m!"║  SECTION 1: Full project summary (Poc.*)             ║"
+  logInfo m!"╚══════════════════════════════════════════════════════╝"
 
   let mut projSorry := false
   let mut projNonBuiltinCount : Nat := 0
@@ -88,3 +112,22 @@ run_cmd liftTermElabM do
       for h2 : j in [:nonBuiltin.size] do
         msg := msg ++ m!"\n    └─ {nonBuiltin[j]}"
       logInfo msg
+
+  -- ── SECTION 2: Machine-readable sorry manifest ──────────────────────────
+
+  logInfo m!"\n╔══════════════════════════════════════════════════════╗"
+  logInfo m!"║  SECTION 2: Sorry manifest (sorry-manifest.txt)     ║"
+  logInfo m!"╚══════════════════════════════════════════════════════╝"
+
+  let mut manifestLines : Array String := #[]
+  for h : i in [:allProjectDecls.size] do
+    let nm := allProjectDecls[i]
+    let usedAxioms := axiomCache[nm]?.getD #[]
+    if usedAxioms.any (· == ``sorryAx) then
+      let modName := moduleLookup[nm]?.map toString |>.getD "(unknown)"
+      let kind := if directSorrySet.contains nm then "direct" else "transitive"
+      manifestLines := manifestLines.push s!"{modName} {nm} {kind}"
+  let sorted := manifestLines.qsort (· < ·)
+  let content := String.join (sorted.toList.map (· ++ "\n"))
+  IO.FS.writeFile "sorry-manifest.txt" content
+  logInfo m!"sorry-manifest.txt written ({sorted.size} sorry-tainted declarations)"
