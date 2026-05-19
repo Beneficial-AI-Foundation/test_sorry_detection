@@ -6,7 +6,6 @@ on:
     paths:
       - 'Poc/**'
       - 'Poc.lean'
-      - 'scripts/**'
       - 'lakefile.toml'
       - 'lean-toolchain'
       - '.github/workflows/lean.yml'
@@ -31,7 +30,7 @@ jobs:
 
       - name: Install elan (Lean version manager)
         run: |
-          curl https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
+          curl https://elan.lean-lang.org/elan-init.sh -sSf | sh -s -- -y --default-toolchain none
           echo "$HOME/.elan/bin" >> $GITHUB_PATH
 
       - name: Verify elan installation
@@ -78,6 +77,10 @@ jobs:
           key: sorry-manifest-main-${{ github.sha }}
           path: sorry-manifest.txt
 
+      - name: Save PR number
+        if: github.event_name == 'pull_request'
+        run: echo "${{ github.event.pull_request.number }}" > pr-number.txt
+
       - name: Upload sorry manifests
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
@@ -86,37 +89,6 @@ jobs:
           path: |
             sorry-manifest.txt
             sorry-manifest-base.txt
+            pr-number.txt
           if-no-files-found: ignore
           retention-days: 1
-
-  report-sorry-delta:
-    name: Report Sorry Delta
-    if: github.event_name == 'pull_request'
-    needs: build
-    runs-on: ubuntu-latest
-    # Write permissions are isolated to this lightweight job.
-    # For fork PRs the token is read-only; the action degrades gracefully.
-    permissions:
-      contents: read
-      pull-requests: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          sparse-checkout: scripts/
-
-      - name: Download sorry manifests
-        uses: actions/download-artifact@v4
-        with:
-          name: sorry-manifests
-          path: sorry-manifests
-
-      - name: Compute sorry delta
-        run: python3 scripts/sorry-diff.py sorry-manifests/sorry-manifest-base.txt sorry-manifests/sorry-manifest.txt
-
-      - name: Post PR comment
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          header: sorry-delta
-          path: .sorry-delta-comment.md
