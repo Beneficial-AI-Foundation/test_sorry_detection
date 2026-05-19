@@ -76,8 +76,8 @@ run_cmd liftTermElabM do
 
   logInfo m!"Total project declarations: {allProjectDecls.size}"
   logInfo m!"With non-builtin axioms: {projNonBuiltinCount} / {allProjectDecls.size}"
-  if projSorry then logInfo m!"⚠  `sorryAx` found in project."
-  else logInfo m!"✓  No `sorryAx` in project."
+  if projSorry then logInfo m!"⚠  `sorry` found in project."
+  else logInfo m!"✓  No `sorry` in project."
 
   for h : i in [:allProjectDecls.size] do
     let nm := allProjectDecls[i]
