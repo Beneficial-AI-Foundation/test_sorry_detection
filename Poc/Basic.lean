@@ -19,7 +19,7 @@ theorem one_mul_nat (a : Nat) : 1 * a = a := Nat.one_mul a
 
 theorem mul_zero_nat (a : Nat) : a * 0 = 0 := Nat.mul_zero a
 
-theorem add_sub_cancel (a b : Nat) : a + b - b = a := Nat.add_sub_cancel
+theorem add_sub_cancel (a b : Nat) : a + b - b = a := Nat.add_sub_cancel a b
 
 theorem zero_mul_nat (a : Nat) : 0 * a = 0 := Nat.zero_mul a
 
