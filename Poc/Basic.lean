@@ -26,3 +26,5 @@ theorem zero_mul_nat (a : Nat) : 0 * a = 0 := Nat.zero_mul a
 theorem mul_assoc_nat (a b c : Nat) : a * (b * c) = (a * b) * c := (Nat.mul_assoc a b c).symm
 
 theorem add_left_cancel (a b c : Nat) : a + b = a + c → b = c := Nat.add_left_cancel
+
+theorem mul_add_nat (a b c : Nat) : a * (b + c) = a * b + a * c := by sorry
