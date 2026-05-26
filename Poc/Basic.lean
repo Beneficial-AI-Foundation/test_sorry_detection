@@ -15,14 +15,14 @@ theorem sub_self_eq_zero (a : Nat) : a - a + 0 = 0 := by
 
 theorem mul_one_nat (a : Nat) : a * 1 = a := by sorry
 
-theorem one_mul_nat (a : Nat) : 1 * a = a := by sorry
+theorem one_mul_nat (a : Nat) : 1 * a = a := Nat.one_mul a
 
-theorem mul_zero_nat (a : Nat) : a * 0 = 0 := by sorry
+theorem mul_zero_nat (a : Nat) : a * 0 = 0 := Nat.mul_zero a
 
-theorem add_sub_cancel (a b : Nat) : a + b - b = a := by sorry
+theorem add_sub_cancel (a b : Nat) : a + b - b = a := Nat.add_sub_cancel
 
-theorem zero_mul_nat (a : Nat) : 0 * a = 0 := by sorry
+theorem zero_mul_nat (a : Nat) : 0 * a = 0 := Nat.zero_mul a
 
-theorem mul_assoc_nat (a b c : Nat) : a * (b * c) = (a * b) * c := by sorry
+theorem mul_assoc_nat (a b c : Nat) : a * (b * c) = (a * b) * c := (Nat.mul_assoc a b c).symm
 
-theorem add_left_cancel (a b c : Nat) : a + b = a + c → b = c := by sorry
+theorem add_left_cancel (a b c : Nat) : a + b = a + c → b = c := Nat.add_left_cancel
