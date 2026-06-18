@@ -40,17 +40,24 @@ jobs:
           echo "=== sorry warnings seen on the cached build ==="
           grep -c "declaration uses .sorry." build-rerun.log || true
 
-      # Evidence 2: probe backend (fixed converter) AFTER the build.
-      - name: Probe backend
-        uses: Beneficial-AI-Foundation/veritooling/actions/sorry-audit-probe@feat/probe-backend-and-sorry-annotations
+      # Evidence 2: probe-lean via the FIXED action (downloads the prebuilt
+      # release binary for this Lean version; no elan re-install, no source
+      # build) AFTER lean-action's build — so its internal `lake build` replays.
+      - name: Probe extract (fixed action, prebuilt release)
+        id: probe
+        uses: Beneficial-AI-Foundation/probe-lean/action@fix/action-use-prebuilt-release
         with:
-          manifest-path: probe-manifest.txt
+          project-path: .
 
-      - name: Show probe manifest
+      # Convert the probe JSON to a manifest with the FIXED schema-2.0 converter
+      # (the @v1 converter is still buggy) and show the result.
+      - name: Convert + show probe manifest
         run: |
+          curl -sSfL "https://raw.githubusercontent.com/Beneficial-AI-Foundation/veritooling/feat/probe-backend-and-sorry-annotations/actions/sorry-audit-probe/probe-to-manifest.py" -o probe-to-manifest.py
+          python3 probe-to-manifest.py "${{ steps.probe.outputs.results-file }}" --output probe-manifest.txt
           echo "=== probe-manifest.txt ==="
           cat probe-manifest.txt
-          echo "=== probe direct-sorry count ==="
+          echo "=== probe direct-sorry count (expect 5) ==="
           grep -vc '^#' probe-manifest.txt || true
 
       # Evidence 3: collectaxioms backend AFTER the same build, for contrast
