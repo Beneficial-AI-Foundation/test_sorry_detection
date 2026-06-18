@@ -6,7 +6,6 @@ on:
     paths:
       - 'Poc/**'
       - 'Poc.lean'
-      - 'scripts/**'
       - 'lakefile.toml'
       - 'lean-toolchain'
       - '.github/workflows/lean.yml'
@@ -19,64 +18,29 @@ env:
 
 jobs:
   build:
-    name: Build Lean Project
+    name: Build & Audit
     runs-on: ubuntu-latest
     permissions:
       contents: read
       actions: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Lean
-        uses: leanprover/lean-action@v1
+      - uses: actions/checkout@v4
         with:
-          build: false
+          fetch-depth: 0
+
+      - uses: leanprover/lean-action@v1
+        with:
+          build: true
           test: false
           lint: false
 
-      - name: Build Lean project
-        run: lake build
-
-      - name: Restore base sorry manifest
-        if: github.event_name == 'pull_request'
-        uses: actions/cache/restore@v4
+      # Same sorry audit as secure-messaging: one composite action restores the
+      # baseline, runs collectAxioms, caches the manifest, and uploads artifacts.
+      # root-module is auto-detected from lakefile.toml defaultTargets (Poc).
+      # (No mathlib here, so none of secure-messaging's disk/cache machinery is
+      # needed — the build is seconds.)
+      - name: Sorry audit
+        uses: Beneficial-AI-Foundation/veritooling/actions/sorry-audit@v1
         with:
-          key: sorry-manifest-${{ github.event.pull_request.base.ref }}-${{ github.event.pull_request.base.sha }}
-          restore-keys: |
-            sorry-manifest-${{ github.event.pull_request.base.ref }}-
-          path: sorry-manifest.txt
-
-      - name: Prepare base manifest
-        if: github.event_name == 'pull_request'
-        run: |
-          [ -f sorry-manifest.txt ] && mv sorry-manifest.txt sorry-manifest-base.txt || true
-
-      - name: Axiom audit and sorry manifest
-        run: lake env lean scripts/Audit.lean
-
-      - name: Save sorry manifest to cache
-        if: >-
-          github.ref == 'refs/heads/main' &&
-          (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-        uses: actions/cache/save@v4
-        with:
-          key: sorry-manifest-main-${{ github.sha }}
-          path: sorry-manifest.txt
-
-      - name: Save PR number
-        if: github.event_name == 'pull_request'
-        run: echo "${{ github.event.pull_request.number }}" > pr-number.txt
-
-      - name: Upload sorry manifests
-        if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
-        with:
-          name: sorry-manifests
-          path: |
-            sorry-manifest.txt
-            sorry-manifest-base.txt
-            pr-number.txt
-          if-no-files-found: ignore
-          retention-days: 1
+          backend: collectaxioms
