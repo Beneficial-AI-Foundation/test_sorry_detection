@@ -36,11 +36,13 @@ jobs:
           lint: false
 
       # Same sorry audit as secure-messaging: one composite action restores the
-      # baseline, runs collectAxioms, caches the manifest, and uploads artifacts.
-      # root-module is auto-detected from lakefile.toml defaultTargets (Poc).
-      # (No mathlib here, so none of secure-messaging's disk/cache machinery is
-      # needed — the build is seconds.)
+      # baseline, runs the probe backend, caches the manifest, and uploads
+      # artifacts. The probe backend reuses this build (lake replays the cached
+      # sorry warnings) and emits file:line, so annotate-new-sorries flags each
+      # newly-introduced sorry inline on the PR diff. Scope auto-derives from
+      # lakefile defaultTargets (Poc).
       - name: Sorry audit
         uses: Beneficial-AI-Foundation/veritooling/actions/sorry-audit@v1
         with:
-          backend: collectaxioms
+          backend: probe
+          annotate-new-sorries: "true"
