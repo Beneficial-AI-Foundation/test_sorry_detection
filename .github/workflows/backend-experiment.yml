@@ -1,0 +1,68 @@
+name: Backend experiment (probe build-reuse)
+
+# Empirical check for the question: after lean-action's `lake build`, does the
+# PROBE backend reuse that build (no recompile) and still see the sorries, or
+# does it under-report / double-build?  Runs both backends after ONE build and
+# prints the evidence: Replayed-vs-Built in the lake log, and each manifest.
+#
+# Uses the probe backend from the PR branch (the fixed schema-2.0 converter);
+# @v1 still has the converter bug, which would confound the result.
+
+on:
+  push:
+    branches: ['experiment/probe-build-reuse']
+  workflow_dispatch:
+
+jobs:
+  experiment:
+    name: probe vs collectaxioms after one build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: leanprover/lean-action@v1
+        with:
+          build: true
+          test: false
+          lint: false
+
+      # Evidence 1: with lean-action's build done, a second `lake build` should
+      # REPLAY the cached sorry warnings without recompiling. If we see "Built"
+      # (not "Replayed"), the build was not reused.
+      - name: Re-run lake build (expect Replayed, not Built)
+        run: |
+          lake build 2>&1 | tee build-rerun.log || true
+          echo "=== Replayed lines ==="; grep -E "Replayed|Built" build-rerun.log || true
+          echo "=== sorry warnings seen on the cached build ==="
+          grep -c "declaration uses .sorry." build-rerun.log || true
+
+      # Evidence 2: probe backend (fixed converter) AFTER the build.
+      - name: Probe backend
+        uses: Beneficial-AI-Foundation/veritooling/actions/sorry-audit-probe@feat/probe-backend-and-sorry-annotations
+        with:
+          manifest-path: probe-manifest.txt
+
+      - name: Show probe manifest
+        run: |
+          echo "=== probe-manifest.txt ==="
+          cat probe-manifest.txt
+          echo "=== probe direct-sorry count ==="
+          grep -vc '^#' probe-manifest.txt || true
+
+      # Evidence 3: collectaxioms backend AFTER the same build, for contrast
+      # (it should additionally flag the transitive-tainted declarations).
+      - name: Collectaxioms backend
+        uses: Beneficial-AI-Foundation/veritooling/actions/sorry-audit-collectaxioms@v1
+        with:
+          manifest-path: ca-manifest.txt
+
+      - name: Show collectaxioms manifest
+        run: |
+          echo "=== ca-manifest.txt ==="
+          cat ca-manifest.txt
+          echo "=== collectaxioms count ==="
+          grep -vc '^#' ca-manifest.txt || true
